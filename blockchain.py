@@ -87,11 +87,14 @@ def mine_block():
         'recipient': owner,
         'amount': MINING_REWARD
     }
-    open_transactions.append(reward_transaction)
+    # Copy the open transactions to a new List
+    copied_transactions = open_transactions[:]
+    # Ensure we are manipulating a local list of transactions not a global one e.g. mining reward can be accepted/rejected
+    copied_transactions.append(reward_transaction)
     block = {
         'previous_hash': hashed_block,
         'index': len(blockchain),
-        'transactions': open_transactions
+        'transactions': copied_transactions
     }
     blockchain.append(block)
     return True
