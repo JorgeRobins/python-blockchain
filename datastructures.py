@@ -29,4 +29,3 @@ s = {'Max', 'Anna', 'Max'}
 # Show that set contains distinct elements only (no repeats)
 print(s)
 # Cannot delete from set, have to use discard
-
