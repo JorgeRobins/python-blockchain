@@ -1,39 +1,64 @@
-# Initializing our (empty) blockchain list
+# External Imports
+from functools import reduce
+import hashlib as hl
+from collections import OrderedDict
+
+# Internal Imports
+from hash_util import hash_string_256, hash_block
+
+# The reward we give to miners (for creating a new block)
 MINING_REWARD = 10
 
+# Our starting block for the blockchain
 GENESIS_BLOCK = {
     'previous_hash': '',
     'index': 0,
-    'transactions': []
+    'transactions': [],
+    'proof': 100
 }
+# Initializing our blockchain with the genesis block
 blockchain = [GENESIS_BLOCK]
+# Unhandled transactions
 open_transactions = []
+# We are the owner of this blockchain node, hence this is our identifier
 owner = 'Jorge'
+# Registered participants: ourself + other people sending/receiving coins
 participants = {'Jorge'}
 
 
-def hash_block(block):
-    return '-'.join([str(block[key]) for key in block])
+def valid_proof(transactions, last_hash, proof):
+    guess = (str(transactions) + str(last_hash) + str(proof)).encode()
+    guess_hash = hash_string_256(guess)
+    print(guess_hash)
+    return guess_hash[0:2] == '00'
+
+
+def proof_of_work():
+    last_block = blockchain[-1]
+    last_hash = hash_block(last_block)
+    proof = 0
+    while not valid_proof(open_transactions, last_hash, proof):
+        proof += 1
+    return proof
 
 
 def get_balance(participant):
-    # Calculate the amount of coins sent for the participant
+    """ Calculate the amount of coins sent for the participant.
+
+    Arguments:
+        :participant: The person for whom to calculate the balance.
+    """
     tx_sender = [[tx['amount'] for tx in block['transactions'] if tx['sender'] ==  participant] for block in blockchain]
     open_tx_sender = [tx['amount'] for tx in open_transactions if tx['sender'] == participant]
     # Add the amount spent in open transactions
     tx_sender.append(open_tx_sender)
-    amount_sent = 0
-    for tx in tx_sender:
-        if len(tx) > 0:
-            amount_sent += tx[0]
-
+    print(tx_sender)
+    # Reduce function sums elements and passes into the tx_sum of the lambda arguments and continues to add the sum of tx_amt until empty. This replaces the for loop.
+    amount_sent = reduce(lambda tx_sum, tx_amt: tx_sum + sum(tx_amt) if len(tx_amt) > 0 else tx_sum, tx_sender, 0)
     # Calculate the amount of coins received for the participant
     tx_recipient = [[tx['amount'] for tx in block['transactions'] if tx['recipient'] ==  participant] for block in blockchain]
-    amount_received = 0
-    for tx in tx_recipient:
-        if len(tx) > 0:
-            amount_received += tx[0]
-
+    # Reduce function sums elements and passes into the tx_sum of the lambda arguments and continues to add the sum of tx_amt until empty. This replaces the for loop.
+    amount_received = reduce(lambda tx_sum, tx_amt: tx_sum + sum(tx_amt) if len(tx_amt) > 0 else tx_sum, tx_recipient, 0)
     # Calculate the balance of coins for the participant
     return amount_received - amount_sent
 
@@ -64,11 +89,15 @@ def add_transaction(recipient, sender=owner, amount=1.0):
         :amount: The amount of coins sent with the transaction (default = 1.0)
 
     """
-    transaction = {
-        'sender': sender,
-        'recipient': recipient,
-        'amount': amount
-    }
+    # transaction = {
+    #     'sender': sender,
+    #     'recipient': recipient,
+    #     'amount': amount
+    # }
+    # OrderedDict remembers the order in which its contents are added
+    transaction = OrderedDict(
+        [('sender', sender), ('recipient', recipient), ('amount', amount)]
+        )
     # If the sender has sufficient balance to send the amount in the transaction, then add to the transaction to mempool
     if verify_transaction(transaction):
         open_transactions.append(transaction)
@@ -80,21 +109,33 @@ def add_transaction(recipient, sender=owner, amount=1.0):
 
 
 def mine_block():
+    """ Create a new block and add open transactions to it."""
+    # Fetch the current last block of the blockchain
     last_block = blockchain[-1]
+    # Hash the last block (=> to be able to compare it to the stroed has value)
     hashed_block = hash_block(last_block)
-    reward_transaction = {
-        'sender': 'MINING',
-        'recipient': owner,
-        'amount': MINING_REWARD
-    }
-    # Copy the open transactions to a new List
+    # Calculate the proof of work
+    proof = proof_of_work()
+    # Miners should be rewarded, so let's create a reward transaction
+    # reward_transaction = {
+    #     'sender': 'MINING',
+    #     'recipient': owner,
+    #     'amount': MINING_REWARD
+    # }
+    # OrderedDict remembers the order in which its contents are added
+    reward_transaction = OrderedDict(
+        [('sender', 'MINING'), ('recipient', owner), ('amount', MINING_REWARD)]
+        )
+    # Copy the open transactions to a new List, instead of manipulating the original open_transactions
     copied_transactions = open_transactions[:]
-    # Ensure we are manipulating a local list of transactions not a global one e.g. mining reward can be accepted/rejected
+    # Ensure we are manipulating a local list of transactions not a global one.
+    # This ensures that if for some reason the mining should fail, we don't have extra reward transactions included across all nodes
     copied_transactions.append(reward_transaction)
     block = {
         'previous_hash': hashed_block,
         'index': len(blockchain),
-        'transactions': copied_transactions
+        'transactions': copied_transactions,
+        'proof': proof
     }
     blockchain.append(block)
     return True
@@ -130,6 +171,10 @@ def verify_chain():
             # Genesis block cannot be modified since the hash is confirmed in the first block
             continue
         if block['previous_hash'] != hash_block(blockchain[index - 1]):
+            return False
+        # Use the transactions except the reward transaction by specifying :-1
+        if not valid_proof(block['transactions'][:-1], block['previous_hash'], block['proof']):
+            print('Proof of work is invalid')
             return False
     return True
 
@@ -199,7 +244,7 @@ while waiting_for_input:
         print('Invalid blockchain!')
         # Break out of the loop
         break
-    print(get_balance('Jorge'))
+    print('Balance of {}: {:6.2f}'.format('Jorge', get_balance('Jorge')))
 else:
     print('User left!')
       
