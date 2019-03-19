@@ -1,13 +1,16 @@
+""" Provides verification helper methods """
+
 # External
 
 # Internal
-from hash_util import hash_string_256, hash_block
+from utility.hash_util import hash_string_256, hash_block
 
 # Verification is a "container" or "helper" class
 # We do not use it to create objects (from a class blueprint)
 # We are simply "verifying"
 
 class Verification:
+    """ A helper class which offers various static and class-based verification methods """
     @staticmethod
     def valid_proof(transactions, last_hash, proof):
         """ Validate a proof of work number and see if it solves the puzzle algorithm

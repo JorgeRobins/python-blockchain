@@ -1,7 +1,7 @@
 from uuid import uuid4
 
 from blockchain import Blockchain
-from verification import Verification
+from utility.verification import Verification
 
 class Node:
     def __init__(self):
@@ -60,7 +60,7 @@ class Node:
             elif user_choice == '3':
                 self.print_blockchain_elements()
             elif user_choice == '4':
-                if Verification.verify_transactions(self.blockchain.open_transactions, self.blockchain.get_balance):
+                if Verification.verify_transactions(self.blockchain.__open_transactions, self.blockchain.get_balance):
                     print('All transactions are valid')
                 else:
                     print('There are invalid transactions')
@@ -79,5 +79,8 @@ class Node:
             print('User left!')
         print('Done!')
 
-node = Node()
-node.listen_for_input()
+
+# Only execute this part of the code if this file is called directlyac
+if __name__ == '__main__':
+    node = Node()
+    node.listen_for_input()
