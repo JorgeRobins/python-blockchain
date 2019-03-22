@@ -9,6 +9,7 @@ from utility.hash_util import hash_block
 from utility.verification import Verification
 from block import Block
 from transaction import Transaction
+from wallet import Wallet
 
 # The reward we give to miners (for creating a new block)
 MINING_REWARD = 50
@@ -52,7 +53,7 @@ class Blockchain:
                 # We need to convert the loaded data because transactions should use OrderedDict
                 updated_blockchain = []
                 for block in blockchain:
-                    converted_tx = [Transaction(tx['sender'], tx['recipient'], tx['amount']) for tx in block['transactions']]
+                    converted_tx = [Transaction(tx['sender'], tx['recipient'], tx['signature'], tx['amount']) for tx in block['transactions']]
                     updated_block = Block(block['index'], block['previous_hash'], converted_tx, block['proof'], block['timestamp'])
                     updated_blockchain.append(updated_block)
                 self.chain = updated_blockchain
@@ -60,7 +61,7 @@ class Blockchain:
                 # We need to convert the loaded data because transactions should use OrderedDict
                 updated_transactions = []
                 for tx in open_transactions:
-                    updated_transaction = Transaction(tx['sender'], tx['recipient'], tx['amount'])
+                    updated_transaction = Transaction(tx['sender'], tx['recipient'], tx['signature'], tx['amount'])
                     updated_transactions.append(updated_transaction)
                 self.__open_transactions = updated_transactions
         # except case specifying IO errors (no file) and Index error (empty file)
@@ -106,6 +107,8 @@ class Blockchain:
 
     def get_balance(self):
         """ Calculate the amount of coins sent for the participant """
+        if self.hosting_node == None:
+            return None
         participant = self.hosting_node
         # Fetch a list of all sent coin amounts for the given person (empty lists are acceptable)
         # This fetches sent amounts of transactions that were already included in block
@@ -141,12 +144,13 @@ class Blockchain:
     # This function accepts two arguments.
     # One required one (transaction_amount) and one optional one (last_transaction)
     # The optional one is optional becuase it has a default value => [1]
-    def add_transaction(self, recipient, sender, amount=1.0):
+    def add_transaction(self, sender, recipient, signature, amount=1.0):
         """ Add a new transaction to the list of open transactions
 
         Arguments:
             :sender: The sender of the coins.
             :recipient: The recipient of the coins.
+            :signature: The signature of the transaction.
             :amount: The amount of coins sent with the transaction (default = 1.0)
         """
         # transaction = {
@@ -154,8 +158,10 @@ class Blockchain:
         #     'recipient': recipient,
         #     'amount': amount
         # }
+        if self.hosting_node == None:
+            return False
         # OrderedDict remembers the order in which its contents are added
-        transaction = Transaction(sender, recipient, amount)
+        transaction = Transaction(sender, recipient, signature, amount)
         # If the sender has sufficient balance to send the amount in the transaction, then add to the transaction to mempool
         if Verification.verify_transaction(transaction, self.get_balance):
             self.__open_transactions.append(transaction)
@@ -166,6 +172,8 @@ class Blockchain:
 
     def mine_block(self):
         """ Create a new block and add open transactions to it."""
+        if self.hosting_node == None:
+            return None
         # Fetch the current last block of the blockchain
         last_block = self.__chain[-1]
         # Hash the last block (=> to be able to compare it to the stroed has value)
@@ -179,22 +187,21 @@ class Blockchain:
         #     'amount': MINING_REWARD
         # }
         # OrderedDict remembers the order in which its contents are added
-        reward_transaction = Transaction('MINING', self.hosting_node, MINING_REWARD)
+        reward_transaction = Transaction('MINING', self.hosting_node, '', MINING_REWARD)
         # Copy the open transactions to a new List, instead of manipulating the original open_transactions
         copied_transactions = self.__open_transactions[:]
         # Ensure we are manipulating a local list of transactions not a global one.
         # This ensures that if for some reason the mining should fail, we don't have extra reward transactions included across all nodes
+        for tx in copied_transactions:
+            if not Wallet.verify_transaction(tx):
+                # Currently this just prevents mining the block
+                # Instead you could remove the invalid transaction from the transaction set and mine the remaining ones
+                return None
         copied_transactions.append(reward_transaction)
         block = Block(len(self.__chain), hashed_block, copied_transactions, proof)
-        # block = {
-        #     'previous_hash': hashed_block,
-        #     'index': len(blockchain),
-        #     'transactions': copied_transactions,
-        #     'proof': proof
-        # }
         self.__chain.append(block)
         # Reset the open transactions back to empty (clear mempool)
         self.__open_transactions = []
         # Call save data here not inside mine block so open transactions are empty in the file
         self.save_data()
-        return True
+        return block
