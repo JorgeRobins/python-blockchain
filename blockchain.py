@@ -22,8 +22,10 @@ class Blockchain:
         self.chain = [GENESIS_BLOCK]
         # Unhandled transactions
         self.__open_transactions = []
-        self.load_data()
         self.hosting_node = hosting_node_id
+        self.__peer_nodes = set()
+        # Keep load_data() at the end so you don't overwrite loaded data
+        self.load_data()
     
     @property
     def chain(self):
@@ -57,13 +59,15 @@ class Blockchain:
                     updated_block = Block(block['index'], block['previous_hash'], converted_tx, block['proof'], block['timestamp'])
                     updated_blockchain.append(updated_block)
                 self.chain = updated_blockchain
-                open_transactions = json.loads(file_content[1])
+                open_transactions = json.loads(file_content[1][:-1])
                 # We need to convert the loaded data because transactions should use OrderedDict
                 updated_transactions = []
                 for tx in open_transactions:
                     updated_transaction = Transaction(tx['sender'], tx['recipient'], tx['signature'], tx['amount'])
                     updated_transactions.append(updated_transaction)
                 self.__open_transactions = updated_transactions
+                peer_nodes = json.loads(file_content[2])
+                self.__peer_nodes = set(peer_nodes)
         # except case specifying IO errors (no file) and Index error (empty file)
         except (IOError, IndexError):
            print('Handled exception...')
@@ -90,6 +94,8 @@ class Blockchain:
                 f.write('\n')
                 saveable_tx = [tx.__dict__ for tx in self.__open_transactions]
                 f.write(json.dumps(saveable_tx))
+                f.write('\n')
+                f.write(json.dumps(list(self.__peer_nodes)))
         except IOError:
             print('Saving failed!')
 
@@ -205,3 +211,25 @@ class Blockchain:
         # Call save data here not inside mine block so open transactions are empty in the file
         self.save_data()
         return block
+
+    def add_peer_node(self, node):
+        """ Adds a new node to the peer node set.
+
+        Arguments:
+            :node: The node URL which should be added.
+        """
+        self.__peer_nodes.add(node)
+        self.save_data()
+
+    def remove_peer_node(self, node):
+        """ Removes a node from the peer node set.
+
+        Arguments:
+            :node: The node URL which should be added.
+        """
+        self.__peer_nodes.discard(node)
+        self.save_data()
+
+    def get_peer_nodes(self):
+        """ Return a list of all connected peer nodes. """
+        return list(self.__peer_nodes)

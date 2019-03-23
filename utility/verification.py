@@ -23,11 +23,11 @@ class Verification:
         """
         # Create a string with all the hash inputs
         guess = (str([tx.to_ordered_dict() for tx in transactions]) + str(last_hash) + str(proof)).encode()
-        print(guess)
+        # print(guess)
         # Hash the string
         # IMPORTANT: This is NOT the same hash as will be stored in the previous_block
         guess_hash = hash_string_256(guess)
-        print(guess_hash)
+        # print(guess_hash)
         # Only a hash (which is based on the above inputs) which meets the requirements is considered valid
         # In this case it is 2 leading zeroes
         return guess_hash[0:2] == '00'
